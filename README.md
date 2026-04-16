@@ -13,6 +13,7 @@
 - **LLM にだけはメモの内容を送信します**。送った内容が学習に使われるかは利用するプロバイダのポリシー次第です
   - **Azure OpenAI**: 既定で学習に使われません (エンタープライズ向けポリシー)
   - **OpenAI API**: 既定で学習に使われません (API経由の入力はデフォルトopt-out)
+  - **OpenAI 互換エンドポイント**: プロバイダごとに異なります。各サービスのポリシーを確認してください
   - **Ollama**: 完全ローカル実行。ネットワーク送信なし
 - プライバシー重視なら Azure OpenAI か Ollama を推奨
 
@@ -42,6 +43,16 @@ cp .env.local.example .env.local
 LLM_PROVIDER=openai
 EMBED_DIM=1536
 OPENAI_API_KEY=sk-...
+```
+
+**OpenAI 互換エンドポイント** (LiteLLM proxy, vLLM, Together AI, Groq など)
+```
+LLM_PROVIDER=openai
+EMBED_DIM=1536
+OPENAI_API_KEY=your-key
+OPENAI_BASE_URL=https://your-endpoint/v1
+OPENAI_CHAT_MODEL=your-model-name
+OPENAI_EMBEDDING_MODEL=your-embedding-model
 ```
 
 **Azure OpenAI** (会社提供のものなど、学習利用を回避したい場合)

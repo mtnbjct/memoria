@@ -16,7 +16,8 @@ function buildClient(): OpenAI | AzureOpenAI {
   if (PROVIDER === "openai") {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("OPENAI_API_KEY required");
-    return new OpenAI({ apiKey });
+    const baseURL = process.env.OPENAI_BASE_URL;
+    return new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
   }
   if (PROVIDER === "ollama") {
     return new OpenAI({
