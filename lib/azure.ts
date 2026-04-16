@@ -6,15 +6,16 @@ const execAsync = promisify(exec);
 
 // Wrap `az account get-access-token` ourselves. AzureCliCredential in
 // @azure/identity sometimes misses the CLI session in enterprise environments.
-function makeAzCliTokenProvider(scope: string): () => Promise<string> {
+function makeAzCliTokenProvider(scope: string, tenant?: string): () => Promise<string> {
   // Strip "/.default" suffix if present; `az account get-access-token --resource` wants the bare resource.
   const resource = scope.endsWith("/.default") ? scope.slice(0, -"/.default".length) : scope;
+  const tenantFlag = tenant ? ` --tenant "${tenant}"` : "";
   let cached: { token: string; expiresOn: number } | null = null;
   return async () => {
     const now = Date.now();
     if (cached && cached.expiresOn - now > 60_000) return cached.token;
     const { stdout } = await execAsync(
-      `az account get-access-token --resource "${resource}" --output json`,
+      `az account get-access-token --resource "${resource}"${tenantFlag} --output json`,
       { maxBuffer: 10 * 1024 * 1024 }
     );
     const json = JSON.parse(stdout) as { accessToken: string; expiresOn?: string; expires_on?: number };
@@ -44,8 +45,8 @@ function buildClient(): OpenAI | AzureOpenAI {
       // Entra ID (AAD) auth — shells out to `az account get-access-token`.
       // Scope can be overridden for APIM/custom gateways.
       const scope = process.env.AZURE_OPENAI_ENTRA_SCOPE ?? "https://cognitiveservices.azure.com/.default";
-      console.log("[azure] Entra scope:", JSON.stringify(scope));
-      const azureADTokenProvider = makeAzCliTokenProvider(scope);
+      const tenant = process.env.AZURE_OPENAI_ENTRA_TENANT;
+      const azureADTokenProvider = makeAzCliTokenProvider(scope, tenant);
       return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
     }
 
