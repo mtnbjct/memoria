@@ -14,9 +14,10 @@ function buildClient(): OpenAI | AzureOpenAI {
     if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT required");
 
     if (useEntra) {
-      // Entra ID (AAD) auth — requires az login or managed identity on the host.
+      // Entra ID (AAD) auth — requires az login. Scope can be overridden for APIM/custom gateways.
+      const scope = process.env.AZURE_OPENAI_ENTRA_SCOPE ?? "https://cognitiveservices.azure.com/.default";
       const credential = new AzureCliCredential();
-      const azureADTokenProvider = getBearerTokenProvider(credential, "https://cognitiveservices.azure.com/.default");
+      const azureADTokenProvider = getBearerTokenProvider(credential, scope);
       return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
     }
 
