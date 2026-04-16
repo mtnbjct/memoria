@@ -1,5 +1,32 @@
 import OpenAI, { AzureOpenAI } from "openai";
-import { AzureCliCredential, getBearerTokenProvider } from "@azure/identity";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
+
+// Wrap `az account get-access-token` ourselves. AzureCliCredential in
+// @azure/identity sometimes misses the CLI session in enterprise environments.
+function makeAzCliTokenProvider(scope: string): () => Promise<string> {
+  // Strip "/.default" suffix if present; `az account get-access-token --resource` wants the bare resource.
+  const resource = scope.endsWith("/.default") ? scope.slice(0, -"/.default".length) : scope;
+  let cached: { token: string; expiresOn: number } | null = null;
+  return async () => {
+    const now = Date.now();
+    if (cached && cached.expiresOn - now > 60_000) return cached.token;
+    const { stdout } = await execAsync(
+      `az account get-access-token --resource "${resource}" --output json`,
+      { maxBuffer: 10 * 1024 * 1024 }
+    );
+    const json = JSON.parse(stdout) as { accessToken: string; expiresOn?: string; expires_on?: number };
+    const expiresOn = json.expires_on
+      ? json.expires_on * 1000
+      : json.expiresOn
+        ? new Date(json.expiresOn).getTime()
+        : now + 50 * 60_000;
+    cached = { token: json.accessToken, expiresOn };
+    return json.accessToken;
+  };
+}
 
 type Provider = "azure" | "openai" | "ollama";
 const PROVIDER = (process.env.LLM_PROVIDER ?? "azure") as Provider;
@@ -14,10 +41,10 @@ function buildClient(): OpenAI | AzureOpenAI {
     if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT required");
 
     if (useEntra) {
-      // Entra ID (AAD) auth — requires az login. Scope can be overridden for APIM/custom gateways.
+      // Entra ID (AAD) auth — shells out to `az account get-access-token`.
+      // Scope can be overridden for APIM/custom gateways.
       const scope = process.env.AZURE_OPENAI_ENTRA_SCOPE ?? "https://cognitiveservices.azure.com/.default";
-      const credential = new AzureCliCredential();
-      const azureADTokenProvider = getBearerTokenProvider(credential, scope);
+      const azureADTokenProvider = makeAzCliTokenProvider(scope);
       return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
     }
 
