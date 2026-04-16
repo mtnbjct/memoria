@@ -1,4 +1,5 @@
 import OpenAI, { AzureOpenAI } from "openai";
+import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
 
 type Provider = "azure" | "openai" | "ollama";
 const PROVIDER = (process.env.LLM_PROVIDER ?? "azure") as Provider;
@@ -14,8 +15,6 @@ function buildClient(): OpenAI | AzureOpenAI {
 
     if (useEntra) {
       // Entra ID (AAD) auth — requires az login or managed identity on the host.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { DefaultAzureCredential, getBearerTokenProvider } = require("@azure/identity") as typeof import("@azure/identity");
       const credential = new DefaultAzureCredential();
       const azureADTokenProvider = getBearerTokenProvider(credential, "https://cognitiveservices.azure.com/.default");
       return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
