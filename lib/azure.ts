@@ -1,5 +1,5 @@
 import OpenAI, { AzureOpenAI } from "openai";
-import { DefaultAzureCredential, getBearerTokenProvider } from "@azure/identity";
+import { AzureCliCredential, getBearerTokenProvider } from "@azure/identity";
 
 type Provider = "azure" | "openai" | "ollama";
 const PROVIDER = (process.env.LLM_PROVIDER ?? "azure") as Provider;
@@ -15,7 +15,7 @@ function buildClient(): OpenAI | AzureOpenAI {
 
     if (useEntra) {
       // Entra ID (AAD) auth — requires az login or managed identity on the host.
-      const credential = new DefaultAzureCredential();
+      const credential = new AzureCliCredential();
       const azureADTokenProvider = getBearerTokenProvider(credential, "https://cognitiveservices.azure.com/.default");
       return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
     }
