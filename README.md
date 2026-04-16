@@ -1,33 +1,20 @@
 # memoria
 
-AIが自動で分解・整理する、個人用メモアプリ。
-雑に書き流したメモをアトミックな単位に分割し、タグ・エンティティ・タスクを抽出して、ネットワーク的に辿れるようにします。
+雑に書き流したメモをAIが自動で整理してくれる、個人用メモアプリ。
 
-- **雑に投げ込む** → AIが整文・切り分け
-- **3ペイン構成**: 要点 (atoms) / メモ (原文) / タスク
+- **雑に投げ込む** → AIが意味のある単位に切り分け、タグ・エンティティ・タスクを抽出
+- **3ペイン構成**: 要点 / メモ (原文) / タスク
 - **絞り込み駆動**: タグや自由テキストの条件をAND合成、3ペインが同じ条件で連動
-- **自然言語質問**: RAGで過去のメモに対してチャット形式で問い合わせ (「○○って今どうなってる？」)
-- **ローカルファースト**: データは自PC内のSQLiteファイルに保存。外部サービス依存なし（LLMプロバイダを除く）
+- **自然言語質問**: 過去のメモに対して「○○って今どうなってる？」とチャット形式で問い合わせ (RAG)
 
----
+## プライバシー
 
-## スクリーンショット / 主要機能
-
-- 投入時にGPTが意味のある単位でアトミックノート化し、タグ・固有名詞・実行可能タスクを抽出
-- embedding検索 + 全文検索 + タグ共起でハイブリッド絞り込み
-- 絞り込みサジェストは直近の活動を時間減衰スコアで重み付け (最近アツい話題が上位)
-- タスクは締切を自然言語から解決 (「金曜まで」→ 記録日基準のISO日付)
-- 無限スクロール、ダークモード、タイムゾーン変換
-
----
-
-## 技術スタック
-
-- **Next.js 15** (App Router) + **React 19** + **TypeScript**
-- **SQLite** (better-sqlite3) + **sqlite-vec** + FTS5
-- **Tailwind CSS**
-- **OpenAI / Azure OpenAI / Ollama** (切替可)
-- データは `./data/memoria.db` (単一ファイル)
+- **データは完全にローカル保存** (自PC内の単一のSQLiteファイル)。外部サービスに保存されません
+- **LLM にだけはメモの内容を送信します**。送った内容が学習に使われるかは利用するプロバイダのポリシー次第です
+  - **Azure OpenAI**: 既定で学習に使われません (エンタープライズ向けポリシー)
+  - **OpenAI API**: 既定で学習に使われません (API経由の入力はデフォルトopt-out)
+  - **Ollama**: 完全ローカル実行。ネットワーク送信なし
+- プライバシー重視なら Azure OpenAI か Ollama を推奨
 
 ---
 
@@ -35,12 +22,12 @@ AIが自動で分解・整理する、個人用メモアプリ。
 
 ### 前提
 - Node.js 20+
-- npm (または pnpm)
+- npm
 
 ### インストール
 
 ```bash
-git clone https://github.com/mtnbjct/memoria.git
+git clone git@github.com:<your-account>/memoria.git
 cd memoria
 npm install
 cp .env.local.example .env.local
@@ -50,16 +37,14 @@ cp .env.local.example .env.local
 
 `.env.local` を編集して、以下のいずれかを設定します。
 
-**OpenAI公式** (個人利用で推奨 / 最安)
+**OpenAI 公式** (個人利用で手軽)
 ```
 LLM_PROVIDER=openai
 EMBED_DIM=1536
 OPENAI_API_KEY=sk-...
-# OPENAI_CHAT_MODEL=gpt-4o-mini
-# OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-**Azure OpenAI** (会社で用意されている場合)
+**Azure OpenAI** (会社提供のものなど、学習利用を回避したい場合)
 ```
 LLM_PROVIDER=azure
 EMBED_DIM=1536
@@ -70,7 +55,7 @@ AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
 ```
 
-**Ollama** (完全ローカル・無料)
+**Ollama** (完全ローカル、無料、ネットに出さない)
 ```
 LLM_PROVIDER=ollama
 EMBED_DIM=768
@@ -92,7 +77,7 @@ npm run dev
 ```
 → http://localhost:3000
 
-### 本番モード (ローカル常用向け)
+### 本番モード
 
 ```bash
 npm run build
@@ -101,71 +86,27 @@ npm start
 
 ---
 
-## Windowsで常駐させる (推奨)
+## Windowsで常駐させる
 
-毎回CLIを立ち上げずに、ログオン時に自動起動する方法です。
+毎回CLIを立ち上げずに、ログオン時に自動起動させる方法です。
 
-### 1. ビルド
+1. 一度ビルド: `npm run build`
+2. タスクスケジューラ (`taskschd.msc`) を開き「タスクの作成」
+3. **トリガー**: 「ログオン時」
+4. **操作**: プログラム `powershell.exe` / 引数:
+   ```
+   -WindowStyle Hidden -File "<プロジェクトのフルパス>\scripts\start-memoria.ps1"
+   ```
+5. **条件**: 「AC電源のみ」のチェックを外す
+6. OK → 一度「実行」で動作確認
 
-```powershell
-npm run build
-```
+以後ブラウザで `http://localhost:3000` を開くだけで使えます。ログは `logs/` に出力されます。
 
-### 2. タスクスケジューラに登録
-
-付属の `scripts/start-memoria.ps1` を使います (プロジェクトパスはスクリプト自身が解決するため、どこに配置しても動作します)。
-
-1. `Win+R` → `taskschd.msc` で **タスクスケジューラ** を開く
-2. 「タスクの作成」をクリック
-3. **全般**タブ:
-   - 名前: `memoria`
-   - 「最上位の特権で実行する」にチェック
-4. **トリガー**タブ → 新規:
-   - 「ログオン時」を選択、自分のユーザーを指定
-5. **操作**タブ → 新規:
-   - プログラム: `powershell.exe`
-   - 引数: `-WindowStyle Hidden -File "<プロジェクトのフルパス>\scripts\start-memoria.ps1"`
-6. **条件**タブ:
-   - 「AC電源のみ」のチェックを外す (ノートPCでも動かしたい場合)
-7. OK → 一度「実行」で動作確認
-
-これで Windows ログオン後に裏で memoria が起動し、ブラウザで `http://localhost:3000` を開くだけで使えます。ログは `logs/memoria-YYYYMMDD.log` に書き出されます。
-
-### コード更新後の再起動
-
+**コード更新後の再起動:**
 ```powershell
 npm run build
 Stop-Process -Name node -Force
 Start-ScheduledTask -TaskName memoria
-```
-
----
-
-## 動作の仕組み
-
-1. **ingest**: メモ投入 → GPTが JSON mode で atomic ノートに分割 + タグ・エンティティ・タスク抽出 → embedding生成 → SQLite に格納
-2. **探索**: タグ / 自由テキスト / 個別メモ の複数フィルタを AND 合成。自由テキストは embedding で近傍atomのプールを作る
-3. **質問 (RAG)**: 質問を embedding → 上位atomを取得 → GPTに根拠として渡し回答生成
-
----
-
-## プロジェクト構造
-
-```
-app/                 -- Next.js App Router (画面 + API)
-  page.tsx           -- 3ペインのメインUI
-  api/               -- notes / atoms / explore / tasks / ask / topics / suggested-tags
-lib/
-  db.ts              -- SQLite + sqlite-vec セットアップとスキーマ
-  azure.ts           -- LLMプロバイダ抽象
-  ingest.ts          -- メモ → atom パイプライン
-  explore.ts         -- フィルタ合成と関連タグ
-  tasks.ts           -- タスク一覧
-  ask.ts             -- RAG ロジック
-components/          -- UI部品 (FilterBar, PaneHeader, AskDrawer, ThemeToggle など)
-scripts/             -- 公開運用スクリプト (start-memoria.ps1 など)
-data/                -- memoria.db が生成される (gitignore済み)
-private/             -- 個人用の実験スクリプトやサンプルデータ置き場 (gitignore済み)
 ```
 
 ---
