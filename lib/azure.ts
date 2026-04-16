@@ -44,6 +44,7 @@ function buildClient(): OpenAI | AzureOpenAI {
       // Entra ID (AAD) auth — shells out to `az account get-access-token`.
       // Scope can be overridden for APIM/custom gateways.
       const scope = process.env.AZURE_OPENAI_ENTRA_SCOPE ?? "https://cognitiveservices.azure.com/.default";
+      console.log("[azure] Entra scope:", JSON.stringify(scope));
       const azureADTokenProvider = makeAzCliTokenProvider(scope);
       return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
     }
