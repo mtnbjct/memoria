@@ -8,9 +8,21 @@ let _client: OpenAI | AzureOpenAI | null = null;
 function buildClient(): OpenAI | AzureOpenAI {
   if (PROVIDER === "azure") {
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
     const apiVersion = process.env.AZURE_OPENAI_API_VERSION ?? "2024-10-21";
-    if (!endpoint || !apiKey) throw new Error("AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY required");
+    const useEntra = (process.env.AZURE_OPENAI_USE_ENTRA ?? "").toLowerCase() === "true";
+    if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT required");
+
+    if (useEntra) {
+      // Entra ID (AAD) auth — requires az login or managed identity on the host.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { DefaultAzureCredential, getBearerTokenProvider } = require("@azure/identity") as typeof import("@azure/identity");
+      const credential = new DefaultAzureCredential();
+      const azureADTokenProvider = getBearerTokenProvider(credential, "https://cognitiveservices.azure.com/.default");
+      return new AzureOpenAI({ endpoint, apiVersion, azureADTokenProvider });
+    }
+
+    const apiKey = process.env.AZURE_OPENAI_API_KEY;
+    if (!apiKey) throw new Error("AZURE_OPENAI_API_KEY required (or set AZURE_OPENAI_USE_ENTRA=true for Entra ID auth)");
     return new AzureOpenAI({ endpoint, apiKey, apiVersion });
   }
   if (PROVIDER === "openai") {

@@ -66,6 +66,15 @@ AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-small
 ```
 
+APIキー認証が無効化されている環境 (OAuth flow failed エラーなど) では、Entra ID 認証に切り替えます:
+```
+LLM_PROVIDER=azure
+EMBED_DIM=1536
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_USE_ENTRA=true
+# APIキーは不要。事前に `az login` でサインインしておく
+```
+
 **Ollama** (完全ローカル、無料、ネットに出さない)
 ```
 LLM_PROVIDER=ollama
