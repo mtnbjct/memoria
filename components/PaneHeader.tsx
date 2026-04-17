@@ -32,7 +32,7 @@ export function PaneHeader({
       {onToggleCollapse && (
         <button
           onClick={onToggleCollapse}
-          className="ml-auto text-xs text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white"
+          className={`text-xs text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white ${right && !collapsed ? "" : "ml-auto"}`}
           title={collapsed ? "展開" : "折り畳む"}
         >{collapsed ? "▶" : "◀"}</button>
       )}

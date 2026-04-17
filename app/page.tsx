@@ -153,6 +153,8 @@ function TopicPane({
 }) {
   const [cards, setCards] = useState<TopicCard[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [hiddenTags, setHiddenTags] = useState<{ tag_name: string; updated_at: string }[]>([]);
 
   const reload = useCallback(() => {
     let cancelled = false;
@@ -164,10 +166,29 @@ function TopicPane({
     return () => { cancelled = true; };
   }, []);
 
+  const reloadHidden = useCallback(() => {
+    fetch("/api/topic-cards/hidden")
+      .then((r) => r.json())
+      .then((j: { tags: { tag_name: string; updated_at: string }[] }) => setHiddenTags(j.tags ?? []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const cancel = reload();
     return cancel;
   }, [reload, refreshKey]);
+
+  useEffect(() => { reloadHidden(); }, [reloadHidden, refreshKey]);
+
+  async function unhide(tag: string) {
+    await fetch(`/api/topic-cards/${encodeURIComponent(tag)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hidden: false }),
+    });
+    setHiddenTags((prev) => prev.filter((h) => h.tag_name !== tag));
+    // Card will re-appear on next refreshTopicCards run (on next note insert).
+  }
 
   async function togglePin(tag: string, pinned: boolean) {
     setCards((prev) => prev.map((c) => c.tag_name === tag ? { ...c, pinned } : c));
@@ -180,8 +201,12 @@ function TopicPane({
   }
 
   async function hideCard(tag: string) {
-    if (!confirm(`#${tag} のトピックを非表示にしますか？\n(今後ホットになっても表示されなくなります)`)) return;
     setCards((prev) => prev.filter((c) => c.tag_name !== tag));
+    setHiddenTags((prev) =>
+      prev.some((h) => h.tag_name === tag)
+        ? prev
+        : [{ tag_name: tag, updated_at: new Date().toISOString() }, ...prev]
+    );
     await fetch(`/api/topic-cards/${encodeURIComponent(tag)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -219,8 +244,34 @@ function TopicPane({
         accent="violet"
         collapsed={collapsed}
         onToggleCollapse={onToggle}
+        right={(
+          <button
+            onClick={() => setShowHidden((s) => !s)}
+            className={`text-xs ${muted} hover:underline`}
+          >{showHidden ? "閉じる" : `非表示リスト (${hiddenTags.length})`}</button>
+        )}
       />
       <div className="flex-1 overflow-y-auto pr-1">
+        {showHidden && (
+          <section className={`${card} p-3 mb-3 border-l-2 border-l-neutral-400/50`}>
+            <div className={`text-xs font-semibold ${muted} mb-2`}>非表示中のトピック</div>
+            {hiddenTags.length === 0 ? (
+              <div className={`text-xs ${faded}`}>なし</div>
+            ) : (
+              <ul className="flex flex-wrap gap-1">
+                {hiddenTags.map((h) => (
+                  <li key={h.tag_name}>
+                    <button
+                      onClick={() => unhide(h.tag_name)}
+                      className={`${chip} px-2 py-0.5 text-xs`}
+                      title="表示を戻す"
+                    >#{h.tag_name}</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
         {cards.length === 0 ? (
           <div className={`text-sm ${faded}`}>まだトピックがありません。メモを投入すると自動生成されます。</div>
         ) : (
