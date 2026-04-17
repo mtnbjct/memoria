@@ -92,6 +92,7 @@ export default function Home() {
           collapsed={collapsed.topic}
           onToggle={() => toggleCollapse("topic")}
           refreshKey={refreshKey}
+          filters={filters}
           setFilters={setFilters}
         />
         <RightPane
@@ -144,11 +145,13 @@ function TopicPane({
   collapsed,
   onToggle,
   refreshKey,
+  filters,
   setFilters,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   refreshKey: number;
+  filters: Filter[];
   setFilters: React.Dispatch<React.SetStateAction<Filter[]>>;
 }) {
   const [cards, setCards] = useState<TopicCard[]>([]);
@@ -214,18 +217,22 @@ function TopicPane({
     });
   }
 
-  function applyTagFilter(tag: string) {
+  function toggleTagFilter(tag: string) {
     setFilters((prev) => {
-      if (prev.some((f) => f.type === "tag" && f.value === tag)) return prev;
+      if (prev.some((f) => f.type === "tag" && f.value === tag)) {
+        return prev.filter((f) => !(f.type === "tag" && f.value === tag));
+      }
       return [...prev, { type: "tag", value: tag }];
     });
   }
 
-  function applyCitationFilter(card: TopicCard) {
-    // Click a card body to drill down: scope all panes to atoms cited by this card.
-    // Implemented as a tag filter + recorded atom ids? Simpler: just tag filter for now.
-    applyTagFilter(card.tag_name);
-  }
+  const activeTagNames = new Set(
+    filters.filter((f) => f.type === "tag").map((f) => f.value as string)
+  );
+  // If any tag filter is active, show only matching topic cards. Else show all.
+  const visibleCards = activeTagNames.size > 0
+    ? cards.filter((c) => activeTagNames.has(c.tag_name))
+    : cards;
 
   if (collapsed) {
     return (
@@ -276,17 +283,19 @@ function TopicPane({
           <div className={`text-sm ${faded}`}>まだトピックがありません。メモを投入すると自動生成されます。</div>
         ) : (
           <ul className="space-y-2">
-            {cards.map((c) => (
+            {visibleCards.map((c) => {
+              const active = filters.some((f) => f.type === "tag" && f.value === c.tag_name);
+              return (
               <li
                 key={c.tag_name}
-                className={`${card} border-l-2 ${c.pinned ? "border-l-violet-400" : "border-l-violet-500/70"} p-3 group cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60`}
-                onClick={() => applyCitationFilter(c)}
+                className={`${card} border-l-2 ${c.pinned ? "border-l-violet-400" : "border-l-violet-500/70"} p-3 group cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60 ${active ? "ring-2 ring-violet-500" : ""}`}
+                onClick={() => toggleTagFilter(c.tag_name)}
               >
                 <div className="flex items-baseline gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); applyTagFilter(c.tag_name); }}
+                    onClick={(e) => { e.stopPropagation(); toggleTagFilter(c.tag_name); }}
                     className="font-medium hover:underline"
-                    title="このタグで絞り込む"
+                    title={active ? "絞り込みを解除" : "このタグで絞り込む"}
                   >#{c.tag_name}</button>
                   {c.pinned && <span className="text-xs text-violet-500">📌</span>}
                   <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
@@ -311,7 +320,8 @@ function TopicPane({
                   <span className="ml-auto">{formatLocal(c.updated_at)}</span>
                 </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
         )}
       </div>
