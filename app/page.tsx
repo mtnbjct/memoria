@@ -136,6 +136,8 @@ type TopicCard = {
   atom_count: number;
   hot_score: number | null;
   updated_at: string;
+  source_atom_ids: number[];
+  pinned: boolean;
 };
 
 function TopicPane({
@@ -152,7 +154,7 @@ function TopicPane({
   const [cards, setCards] = useState<TopicCard[]>([]);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     let cancelled = false;
     setBusy(true);
     fetch("/api/topic-cards")
@@ -160,7 +162,45 @@ function TopicPane({
       .then((j: { cards: TopicCard[] }) => { if (!cancelled) setCards(j.cards ?? []); })
       .finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, []);
+
+  useEffect(() => {
+    const cancel = reload();
+    return cancel;
+  }, [reload, refreshKey]);
+
+  async function togglePin(tag: string, pinned: boolean) {
+    setCards((prev) => prev.map((c) => c.tag_name === tag ? { ...c, pinned } : c));
+    await fetch(`/api/topic-cards/${encodeURIComponent(tag)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pinned }),
+    });
+    reload();
+  }
+
+  async function hideCard(tag: string) {
+    if (!confirm(`#${tag} のトピックを非表示にしますか？\n(今後ホットになっても表示されなくなります)`)) return;
+    setCards((prev) => prev.filter((c) => c.tag_name !== tag));
+    await fetch(`/api/topic-cards/${encodeURIComponent(tag)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hidden: true }),
+    });
+  }
+
+  function applyTagFilter(tag: string) {
+    setFilters((prev) => {
+      if (prev.some((f) => f.type === "tag" && f.value === tag)) return prev;
+      return [...prev, { type: "tag", value: tag }];
+    });
+  }
+
+  function applyCitationFilter(card: TopicCard) {
+    // Click a card body to drill down: scope all panes to atoms cited by this card.
+    // Implemented as a tag filter + recorded atom ids? Simpler: just tag filter for now.
+    applyTagFilter(card.tag_name);
+  }
 
   if (collapsed) {
     return (
@@ -188,19 +228,36 @@ function TopicPane({
             {cards.map((c) => (
               <li
                 key={c.tag_name}
-                className={`${card} border-l-2 border-l-violet-500/70 p-3`}
+                className={`${card} border-l-2 ${c.pinned ? "border-l-violet-400" : "border-l-violet-500/70"} p-3 group cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60`}
+                onClick={() => applyCitationFilter(c)}
               >
-                <button
-                  onClick={() => setFilters((prev) => {
-                    if (prev.some((f) => f.type === "tag" && f.value === c.tag_name)) return prev;
-                    return [...prev, { type: "tag", value: c.tag_name }];
-                  })}
-                  className="font-medium hover:underline"
-                  title="このタグで絞り込む"
-                >#{c.tag_name}</button>
+                <div className="flex items-baseline gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); applyTagFilter(c.tag_name); }}
+                    className="font-medium hover:underline"
+                    title="このタグで絞り込む"
+                  >#{c.tag_name}</button>
+                  {c.pinned && <span className="text-xs text-violet-500">📌</span>}
+                  <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); togglePin(c.tag_name, !c.pinned); }}
+                      className={`text-xs ${faded} hover:text-violet-500`}
+                      title={c.pinned ? "ピン留めを外す" : "ピン留めする"}
+                    >{c.pinned ? "📌解除" : "📌"}</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); hideCard(c.tag_name); }}
+                      className={`text-xs ${faded} hover:text-red-500`}
+                      title="このトピックを今後表示しない"
+                    >非表示</button>
+                  </div>
+                </div>
                 <p className={`text-sm text-neutral-700 dark:text-neutral-400 mt-1 whitespace-pre-wrap`}>{c.summary}</p>
-                <div className={`text-xs ${faded} mt-1`}>
-                  {c.atom_count}件のノート · {formatLocal(c.updated_at)}
+                <div className={`text-xs ${faded} mt-1 flex items-center gap-2`}>
+                  <span>{c.atom_count}件のノート</span>
+                  {c.source_atom_ids.length > 0 && (
+                    <span className="text-neutral-400">· 根拠 {c.source_atom_ids.length}件</span>
+                  )}
+                  <span className="ml-auto">{formatLocal(c.updated_at)}</span>
                 </div>
               </li>
             ))}

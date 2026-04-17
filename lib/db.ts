@@ -98,11 +98,25 @@ function ensureSchema(db: Database.Database) {
       atom_count INTEGER NOT NULL DEFAULT 0,
       hot_score REAL,
       last_atom_id INTEGER NOT NULL DEFAULT 0,
+      source_atom_ids TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       archived_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_topic_cards_archived ON topic_cards(archived_at);
     CREATE INDEX IF NOT EXISTS idx_topic_cards_hot ON topic_cards(hot_score DESC);
+
+    CREATE TABLE IF NOT EXISTS topic_prefs (
+      tag_name TEXT PRIMARY KEY,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
+
+  // Back-compat: add source_atom_ids column if the DB predates it
+  const cols = db.prepare("PRAGMA table_info(topic_cards)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "source_atom_ids")) {
+    db.exec("ALTER TABLE topic_cards ADD COLUMN source_atom_ids TEXT");
+  }
 }
