@@ -158,13 +158,19 @@ function TopicPane({
   const [busy, setBusy] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [hiddenTags, setHiddenTags] = useState<{ tag_name: string; updated_at: string }[]>([]);
+  const latestUpdatedRef = useRef<string>("");
 
   const reload = useCallback(() => {
     let cancelled = false;
     setBusy(true);
     fetch("/api/topic-cards")
       .then((r) => r.json())
-      .then((j: { cards: TopicCard[] }) => { if (!cancelled) setCards(j.cards ?? []); })
+      .then((j: { cards: TopicCard[] }) => {
+        if (cancelled) return;
+        setCards(j.cards ?? []);
+        const max = (j.cards ?? []).reduce((m: string, c: TopicCard) => (c.updated_at > m ? c.updated_at : m), "");
+        latestUpdatedRef.current = max;
+      })
       .finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
   }, []);
@@ -182,6 +188,34 @@ function TopicPane({
   }, [reload, refreshKey]);
 
   useEffect(() => { reloadHidden(); }, [reloadHidden, refreshKey]);
+
+  // Topic-cards are refreshed asynchronously on the server (debounced + LLM calls),
+  // so bumping refreshKey when a note finishes processing is not enough.
+  // Poll for updates after each note-processed signal, stopping when we see
+  // any card whose updated_at is newer than what we had before the bump,
+  // or after a bounded number of attempts.
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    const baseline = latestUpdatedRef.current;
+    let attempts = 0;
+    const maxAttempts = 10; // ~60s at 6s interval
+    const id = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch("/api/topic-cards");
+        const j = (await r.json()) as { cards: TopicCard[] };
+        const max = (j.cards ?? []).reduce((m: string, c: TopicCard) => (c.updated_at > m ? c.updated_at : m), "");
+        if (max > baseline) {
+          setCards(j.cards ?? []);
+          latestUpdatedRef.current = max;
+          clearInterval(id);
+          return;
+        }
+      } catch {}
+      if (attempts >= maxAttempts) clearInterval(id);
+    }, 6000);
+    return () => clearInterval(id);
+  }, [refreshKey]);
 
   async function unhide(tag: string) {
     await fetch(`/api/topic-cards/${encodeURIComponent(tag)}`, {
