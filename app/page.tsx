@@ -187,7 +187,7 @@ function TopicPane({
       body: JSON.stringify({ hidden: false }),
     });
     setHiddenTags((prev) => prev.filter((h) => h.tag_name !== tag));
-    // Card will re-appear on next refreshTopicCards run (on next note insert).
+    reload();
   }
 
   async function togglePin(tag: string, pinned: boolean) {

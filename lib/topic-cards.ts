@@ -233,5 +233,8 @@ export function setHidden(tag: string, hidden: boolean) {
   if (hidden) {
     // Also archive the card immediately so it disappears from the pane
     db.prepare("UPDATE topic_cards SET archived_at = datetime('now') WHERE tag_name = ? AND archived_at IS NULL").run(tag);
+  } else {
+    // Un-archive so the card reappears with its last known summary
+    db.prepare("UPDATE topic_cards SET archived_at = NULL WHERE tag_name = ?").run(tag);
   }
 }
