@@ -36,12 +36,32 @@ function formatLocal(s: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+type PaneKey = "topic" | "atom" | "memo" | "task";
+
 export default function Home() {
   const [filters, setFilters] = useState<Filter[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const bumpRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
   const [askOpen, setAskOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<PaneKey, boolean>>({
+    topic: false, atom: true, memo: false, task: false,
+  });
+
+  // Persist collapse state across reloads
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("memoria.collapsed");
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("memoria.collapsed", JSON.stringify(collapsed)); } catch {}
+  }, [collapsed]);
+
+  function toggleCollapse(key: PaneKey) {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   function setSelectedNoteAndFilter(id: number | null) {
     setSelectedNoteId(id);
@@ -52,6 +72,10 @@ export default function Home() {
     }
   }
 
+  const gridCols = (["topic", "atom", "memo", "task"] as PaneKey[])
+    .map((k) => (collapsed[k] ? "minmax(44px, 44px)" : "1fr"))
+    .join(" ");
+
   return (
     <div className="flex flex-col gap-3 h-[calc(100vh-6rem)]">
       <FilterBar
@@ -60,25 +84,40 @@ export default function Home() {
         onClearNote={() => setSelectedNoteId(null)}
         onAsk={() => setAskOpen(true)}
       />
-      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
+      <div
+        className="grid gap-4 flex-1 min-h-0"
+        style={{ gridTemplateColumns: gridCols }}
+      >
+        <TopicPane
+          collapsed={collapsed.topic}
+          onToggle={() => toggleCollapse("topic")}
+          refreshKey={refreshKey}
+          setFilters={setFilters}
+        />
         <RightPane
           filters={filters}
           setFilters={setFilters}
           selectedNoteId={selectedNoteId}
           setSelectedNoteId={setSelectedNoteId}
           refreshKey={refreshKey}
+          collapsed={collapsed.atom}
+          onToggle={() => toggleCollapse("atom")}
         />
         <LeftPane
           filters={filters}
           selectedNoteId={selectedNoteId}
           onSelectNote={setSelectedNoteAndFilter}
           onNoteProcessed={bumpRefresh}
+          collapsed={collapsed.memo}
+          onToggle={() => toggleCollapse("memo")}
         />
         <TaskPane
           filters={filters}
           selectedNoteId={selectedNoteId}
           setSelectedNoteId={setSelectedNoteId}
           refreshKey={refreshKey}
+          collapsed={collapsed.task}
+          onToggle={() => toggleCollapse("task")}
         />
       </div>
       <AskDrawer
@@ -87,6 +126,87 @@ export default function Home() {
         filters={filters}
         onSelectNote={setSelectedNoteAndFilter}
       />
+    </div>
+  );
+}
+
+type TopicCard = {
+  tag_name: string;
+  summary: string;
+  atom_count: number;
+  hot_score: number | null;
+  updated_at: string;
+};
+
+function TopicPane({
+  collapsed,
+  onToggle,
+  refreshKey,
+  setFilters,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  refreshKey: number;
+  setFilters: React.Dispatch<React.SetStateAction<Filter[]>>;
+}) {
+  const [cards, setCards] = useState<TopicCard[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBusy(true);
+    fetch("/api/topic-cards")
+      .then((r) => r.json())
+      .then((j: { cards: TopicCard[] }) => { if (!cancelled) setCards(j.cards ?? []); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-2 overflow-hidden py-2 border-r dark:border-neutral-800">
+        <button onClick={onToggle} className="text-xs text-neutral-500 hover:text-black dark:hover:text-white" title="展開">▶</button>
+        <div className="text-xs font-bold [writing-mode:vertical-rl]">トピック</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 overflow-hidden">
+      <PaneHeader
+        title="トピック"
+        subtitle={busy ? "読込中..." : `${cards.length}件`}
+        accent="violet"
+        collapsed={collapsed}
+        onToggleCollapse={onToggle}
+      />
+      <div className="flex-1 overflow-y-auto pr-1">
+        {cards.length === 0 ? (
+          <div className={`text-sm ${faded}`}>まだトピックがありません。メモを投入すると自動生成されます。</div>
+        ) : (
+          <ul className="space-y-2">
+            {cards.map((c) => (
+              <li
+                key={c.tag_name}
+                className={`${card} border-l-2 border-l-violet-500/70 p-3`}
+              >
+                <button
+                  onClick={() => setFilters((prev) => {
+                    if (prev.some((f) => f.type === "tag" && f.value === c.tag_name)) return prev;
+                    return [...prev, { type: "tag", value: c.tag_name }];
+                  })}
+                  className="font-medium hover:underline"
+                  title="このタグで絞り込む"
+                >#{c.tag_name}</button>
+                <p className={`text-sm text-neutral-700 dark:text-neutral-400 mt-1 whitespace-pre-wrap`}>{c.summary}</p>
+                <div className={`text-xs ${faded} mt-1`}>
+                  {c.atom_count}件のノート · {formatLocal(c.updated_at)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -216,11 +336,15 @@ function TaskPane({
   selectedNoteId,
   setSelectedNoteId,
   refreshKey,
+  collapsed,
+  onToggle,
 }: {
   filters: Filter[];
   selectedNoteId: number | null;
   setSelectedNoteId: (id: number | null) => void;
   refreshKey: number;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const TASK_PAGE = 50;
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -279,9 +403,18 @@ function TaskPane({
     });
   }
 
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-2 overflow-hidden py-2 border-l dark:border-neutral-800">
+        <button onClick={onToggle} className="text-xs text-neutral-500 hover:text-black dark:hover:text-white" title="展開">◀</button>
+        <div className="text-xs font-bold [writing-mode:vertical-rl]">タスク</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 overflow-hidden">
-      <PaneHeader title="タスク" subtitle={busy ? "集計中..." : `${total}件`} accent="amber" />
+      <PaneHeader title="タスク" subtitle={busy ? "集計中..." : `${total}件`} accent="amber" collapsed={collapsed} onToggleCollapse={onToggle} />
       <section className="shrink-0 flex items-center gap-2">
         <div className="flex rounded border dark:border-neutral-700 overflow-hidden text-xs">
           {(["open", "done", "all"] as const).map((s) => (
@@ -381,11 +514,15 @@ function LeftPane({
   selectedNoteId,
   onSelectNote,
   onNoteProcessed,
+  collapsed,
+  onToggle,
 }: {
   filters: Filter[];
   selectedNoteId: number | null;
   onSelectNote: (id: number | null) => void;
   onNoteProcessed: () => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const PAGE = 50;
   const [text, setText] = useState("");
@@ -482,11 +619,22 @@ function LeftPane({
     reload();
   }
 
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-2 overflow-hidden py-2 border-l dark:border-neutral-800">
+        <button onClick={onToggle} className="text-xs text-neutral-500 hover:text-black dark:hover:text-white" title="展開">◀</button>
+        <div className="text-xs font-bold [writing-mode:vertical-rl]">メモ</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 overflow-hidden">
       <PaneHeader
         title="メモ"
         subtitle={`${total}件`}
+        collapsed={collapsed}
+        onToggleCollapse={onToggle}
         right={selectedNoteId != null && (
           <button onClick={() => onSelectNote(null)} className={`text-xs ${muted} hover:underline`}>
             選択解除
@@ -548,12 +696,16 @@ function RightPane({
   selectedNoteId,
   setSelectedNoteId,
   refreshKey,
+  collapsed,
+  onToggle,
 }: {
   filters: Filter[];
   setFilters: React.Dispatch<React.SetStateAction<Filter[]>>;
   selectedNoteId: number | null;
   setSelectedNoteId: (id: number | null) => void;
   refreshKey: number;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const ATOM_PAGE = 30;
   const [result, setResult] = useState<Result | null>(null);
@@ -640,9 +792,18 @@ function RightPane({
     : recentTotal;
   const atomSubtitle = busy ? "集計中..." : `${atomCount}件`;
 
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-2 overflow-hidden py-2 border-l dark:border-neutral-800">
+        <button onClick={onToggle} className="text-xs text-neutral-500 hover:text-black dark:hover:text-white" title="展開">◀</button>
+        <div className="text-xs font-bold [writing-mode:vertical-rl]">要点</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 overflow-hidden">
-      <PaneHeader title="要点" subtitle={atomSubtitle} accent="indigo" />
+      <PaneHeader title="要点" subtitle={atomSubtitle} accent="indigo" collapsed={collapsed} onToggleCollapse={onToggle} />
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-5">
         {filters.length === 0 && recentAtoms && recentAtoms.length > 0 && (

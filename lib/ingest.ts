@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDb } from "./db";
 import { llm, CHAT_MODEL, embed } from "./azure";
+import { refreshTopicCards } from "./topic-cards";
 
 const TaskSchema = z.object({
   text: z.string(),
@@ -170,4 +171,13 @@ export async function ingestNote(noteId: number, raw: string) {
     }
   }
   db.prepare("UPDATE notes SET processed_at = datetime('now') WHERE id = ?").run(noteId);
+
+  // Refresh topic cards after this note's atoms are in place.
+  // Runs async in the same function scope; errors logged, but processed_at is already set.
+  try {
+    const r = await refreshTopicCards();
+    console.log(`[topic-cards] refreshed: built=${r.built} updated=${r.updated} archived=${r.archived}`);
+  } catch (err) {
+    console.error("[topic-cards] refresh failed", err);
+  }
 }

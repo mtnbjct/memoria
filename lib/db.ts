@@ -91,5 +91,18 @@ function ensureSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_tasks_note ON tasks(note_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_at);
+
+    CREATE TABLE IF NOT EXISTS topic_cards (
+      tag_name TEXT PRIMARY KEY,
+      summary TEXT NOT NULL,
+      atom_count INTEGER NOT NULL DEFAULT 0,
+      hot_score REAL,
+      last_atom_id INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      archived_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_topic_cards_archived ON topic_cards(archived_at);
+    CREATE INDEX IF NOT EXISTS idx_topic_cards_hot ON topic_cards(hot_score DESC);
   `);
 }
