@@ -312,7 +312,7 @@ function TopicPane({
                       onClick={() => unhide(h.tag_name)}
                       className={`${chip} px-2 py-0.5 text-xs`}
                       title="表示を戻す"
-                    >#{h.tag_name}</button>
+                    >{h.tag_name}</button>
                   </li>
                 ))}
               </ul>
@@ -336,7 +336,7 @@ function TopicPane({
                     onClick={(e) => { e.stopPropagation(); toggleTagFilter(c.tag_name); }}
                     className="font-medium hover:underline"
                     title={active ? "絞り込みを解除" : "このタグで絞り込む"}
-                  >#{c.tag_name}</button>
+                  >{c.tag_name}</button>
                   {c.pinned && <span className="text-xs text-violet-500">📌</span>}
                   <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
                     <button
@@ -414,9 +414,9 @@ function FilterBar({
   }
 
   function filterLabel(f: Filter): string {
-    if (f.type === "tag") return `#${f.value}`;
+    if (f.type === "tag") return `${f.value}`;
     if (f.type === "text") return `"${f.value}"`;
-    return `📝 メモ #${f.value}`;
+    return `📝 メモ ${f.value}`;
   }
 
   const selectedTagNames = new Set(
@@ -459,7 +459,7 @@ function FilterBar({
               key={t.name}
               onClick={() => addFilter({ type: "tag", value: t.name })}
               className={`${chip} px-3 py-1 text-sm`}
-            >#{t.name} <span className={`${faded} text-xs`}>×{t.count}</span></button>
+            >{t.name} <span className={`${faded} text-xs`}>×{t.count}</span></button>
           ))}
 
         <button
@@ -630,6 +630,7 @@ function TaskPane({
                           </span>
                         )}
                         <span className="truncate" title={t.atom_heading}>{t.atom_heading}</span>
+                        <span className="ml-auto shrink-0">{formatLocal(t.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -833,9 +834,9 @@ function LeftPane({
                     title="削除"
                   >削除</button>
                 </div>
-                <div className={`text-xs ${faded} mt-1`}>
-                  {formatLocal(n.created_at)}
-                  {!n.processed_at && " · 処理中..."}
+                <div className={`text-xs ${faded} mt-1 flex items-center gap-2`}>
+                  {!n.processed_at && <span>処理中...</span>}
+                  <span className="ml-auto">{formatLocal(n.created_at)}</span>
                 </div>
               </li>
             );
@@ -977,16 +978,16 @@ function RightPane({
                       title="元メモを表示"
                     >{a.heading}</button>
                     <p className="text-sm text-neutral-700 dark:text-neutral-400 mt-1 whitespace-pre-wrap">{a.content}</p>
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-2 items-center">
                       {a.tags.map((t) => (
                         <button
                           key={t}
                           onClick={() => addFilter({ type: "tag", value: t })}
                           className={`${chip} px-2 py-0.5 text-xs`}
-                        >#{t}</button>
+                        >{t}</button>
                       ))}
+                      <span className={`text-xs ${faded} ml-auto`}>{formatLocal(a.created_at)}</span>
                     </div>
-                    <div className={`text-xs ${faded} mt-1`}>{formatLocal(a.created_at)}</div>
                   </li>
                 );
               })}
@@ -1011,16 +1012,16 @@ function RightPane({
                       title="元メモを表示"
                     >{a.heading}</button>
                     <p className="text-sm text-neutral-700 dark:text-neutral-400 mt-1 whitespace-pre-wrap">{a.content}</p>
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-2 items-center">
                       {a.tags.map((t) => (
                         <button
                           key={t}
                           onClick={() => addFilter({ type: "tag", value: t })}
                           className={`${chip} px-2 py-0.5 text-xs`}
-                        >#{t}</button>
+                        >{t}</button>
                       ))}
+                      <span className={`text-xs ${faded} ml-auto`}>{formatLocal(a.created_at)}</span>
                     </div>
-                    <div className={`text-xs ${faded} mt-1`}>{formatLocal(a.created_at)}</div>
                   </li>
                 );
               })}

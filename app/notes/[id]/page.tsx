@@ -47,7 +47,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
               <p className="text-sm mt-2 whitespace-pre-wrap">{a.content}</p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {(tagMap.get(a.id) ?? []).map((t) => (
-                  <span key={t} className="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-xs">#{t}</span>
+                  <span key={t} className="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-xs">{t}</span>
                 ))}
               </div>
             </li>
