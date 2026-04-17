@@ -189,31 +189,37 @@ function TopicPane({
 
   useEffect(() => { reloadHidden(); }, [reloadHidden, refreshKey]);
 
-  // Topic-cards are refreshed asynchronously on the server (debounced + LLM calls),
-  // so bumping refreshKey when a note finishes processing is not enough.
-  // Poll for updates after each note-processed signal, stopping when we see
-  // any card whose updated_at is newer than what we had before the bump,
-  // or after a bounded number of attempts.
+  // Topic-cards are refreshed asynchronously on the server (debounced + sequential
+  // LLM calls, one per hot tag). A full refresh can take 1-3 minutes for ~20 tags.
+  // Poll periodically: update whenever something changed, stop when there have
+  // been N consecutive polls with no further changes.
   useEffect(() => {
     if (refreshKey === 0) return;
-    const baseline = latestUpdatedRef.current;
-    let attempts = 0;
-    const maxAttempts = 10; // ~60s at 6s interval
+    let lastSeenMax = latestUpdatedRef.current;
+    let idleChecks = 0;
+    const maxIdle = 4;        // ~16s quiet before we assume the server is done
+    const maxDuration = 240;  // absolute cap: 240s
+    let elapsed = 0;
+    const intervalMs = 4000;
     const id = setInterval(async () => {
-      attempts++;
+      elapsed += intervalMs / 1000;
       try {
         const r = await fetch("/api/topic-cards");
         const j = (await r.json()) as { cards: TopicCard[] };
         const max = (j.cards ?? []).reduce((m: string, c: TopicCard) => (c.updated_at > m ? c.updated_at : m), "");
-        if (max > baseline) {
+        if (max > lastSeenMax) {
           setCards(j.cards ?? []);
           latestUpdatedRef.current = max;
-          clearInterval(id);
-          return;
+          lastSeenMax = max;
+          idleChecks = 0;
+        } else {
+          idleChecks++;
         }
-      } catch {}
-      if (attempts >= maxAttempts) clearInterval(id);
-    }, 6000);
+      } catch {
+        idleChecks++;
+      }
+      if (idleChecks >= maxIdle || elapsed >= maxDuration) clearInterval(id);
+    }, intervalMs);
     return () => clearInterval(id);
   }, [refreshKey]);
 
