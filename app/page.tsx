@@ -60,7 +60,7 @@ export default function Home() {
         onClearNote={() => setSelectedNoteId(null)}
         onAsk={() => setAskOpen(true)}
       />
-      <div className="grid grid-cols-[minmax(300px,1fr)_minmax(400px,1.3fr)_minmax(300px,1fr)] gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
         <RightPane
           filters={filters}
           setFilters={setFilters}

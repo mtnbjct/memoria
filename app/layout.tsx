@@ -28,12 +28,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <header className="border-b bg-white dark:bg-neutral-900 dark:border-neutral-800">
-          <nav className="mx-auto flex max-w-[2400px] items-center gap-4 p-4">
+          <nav className="mx-auto flex w-full items-center gap-4 p-4">
             <Link href="/" className="font-bold text-lg">memoria</Link>
             <div className="ml-auto"><ThemeToggle /></div>
           </nav>
         </header>
-        <main className="mx-auto max-w-[2400px] p-4">{children}</main>
+        <main className="mx-auto w-full p-4">{children}</main>
       </body>
     </html>
   );
